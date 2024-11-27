@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 import "./FixidityLib.sol";
 
 contract supplychain{
-    address public shop;
+    address public buyer;
     mapping (address => bool) suppliersList;
     address[3] suppliers;
     mapping (address => bool) customersLists;
@@ -28,7 +28,7 @@ contract supplychain{
         int256 maxQS;
     }
 
-    struct shopTerms{
+    struct buyerTerms{
         int256 minQB;
         int256 c;
     }
@@ -36,7 +36,7 @@ contract supplychain{
     mapping (address => uint8) public supplierTermsLists;
     mapping (uint8 => supplierTerms) public supplierTermsIds;
 
-    mapping (uint8 => shopTerms) public shopTermsIds;
+    mapping (uint8 => buyerTerms) public buyerTermsIds;
 
     mapping (uint8 => int256) public minQ;
 
@@ -56,12 +56,12 @@ contract supplychain{
     event Transfer(address sender, address receiver, uint amount);
 
     constructor(int256 _w1, int256 _w2, int256 _w3){
-        shop = msg.sender;
+        buyer = msg.sender;
         w = weight(_w1,_w2,_w3);
         currentPhase = ShoppingPhases.Registration;
     }
-    modifier onlyShop {
-		require(msg.sender == shop, "Only shop may call this function.");
+    modifier onlyBuyer {
+		require(msg.sender == buyer, "Only buyer may call this function.");
 		_;
 	}
     modifier duringRegistration {
@@ -99,7 +99,7 @@ contract supplychain{
 		_;
 	}
 
-    function addSupplierPublicKey(address supplierAddress) public onlyShop duringRegistration {
+    function addSupplierPublicKey(address supplierAddress) public onlyBuyer duringRegistration {
         suppliersList[supplierAddress] = true;
     }
 
@@ -107,7 +107,7 @@ contract supplychain{
         customersLists[msg.sender] = true;
     }
 
-    function endRegistration() public onlyShop duringRegistration {
+    function endRegistration() public onlyBuyer duringRegistration {
         currentPhase = ShoppingPhases.Ordering;
         emit NewSupplyChainPhase(ShoppingPhases.Ordering);
     }
@@ -132,22 +132,22 @@ contract supplychain{
         }
     }
 
-    function minQCalulation() public onlyShop duringAllocation {
+    function minQCalulation() public onlyBuyer duringAllocation {
         for(uint8 i=1; i<=3; i++){
             int256 _minQS = supplierTermsIds[i].minQS;
-            int256 _minQB = shopTermsIds[i].minQB;
+            int256 _minQB = buyerTermsIds[i].minQB;
             int256 max = _minQS >= _minQB ? _minQS : _minQB;
-            if(max <= FixidityLib.multiply(shopTermsIds[i].c,Q)){
+            if(max <= FixidityLib.multiply(buyerTermsIds[i].c,Q)){
                 minQ[i] = max;
             }else{
-                minQ[i] = FixidityLib.multiply(shopTermsIds[i].c,Q);
+                minQ[i] = FixidityLib.multiply(buyerTermsIds[i].c,Q);
             }
         }
     }
 
-    function shopStatement(shopTerms memory _shopTerms, address _supplierAddress) public onlyShop duringAllocation {
+    function buyerStatement(buyerTerms memory _buyerTerms, address _supplierAddress) public onlyBuyer duringAllocation {
         require(order == true && numSuppliers > 0, "State only after order of custmoer!");
-        shopTermsIds[supplierTermsLists[_supplierAddress]] = _shopTerms;
+        buyerTermsIds[supplierTermsLists[_supplierAddress]] = _buyerTerms;
         if(numSuppliers == 1){
             numSuppliers--;
             minQCalulation();
@@ -157,7 +157,7 @@ contract supplychain{
 
     }
 
-    function payPriceCal() public onlyShop duringAllocation {
+    function payPriceCal() public onlyBuyer duringAllocation {
         int256[3] memory sum;
         int256[3] memory S;
         int256[3] memory P = [supplierTermsIds[1].P,supplierTermsIds[2].P,supplierTermsIds[3].P];
@@ -193,7 +193,7 @@ contract supplychain{
         }
     }
 
-    function deposit() public onlyShop duringAllocation  payable {
+    function deposit() public onlyBuyer duringAllocation  payable {
         require(msg.value == uint256(payFee) , "Not equal");
         emit Deposit(msg.sender, msg.value);
         balances[msg.sender] += msg.value;
@@ -201,7 +201,7 @@ contract supplychain{
         emit NewSupplyChainPhase(ShoppingPhases.Delivery);
     }
 
-    function transfer(address[3] memory receivers, uint[3] memory amount) public onlyShop duringDelivery {
+    function transfer(address[3] memory receivers, uint[3] memory amount) public onlyBuyer duringDelivery {
         uint sum = 0;
         for (uint i=0; i<amount.length; i++) {
             sum = sum + amount[i];
@@ -214,7 +214,7 @@ contract supplychain{
         }
     }
 
-    function delivery() public onlyShop duringDelivery {
+    function delivery() public onlyBuyer duringDelivery {
         transfer(suppliers, [uint256(payPrice[1]), uint256(payPrice[2]), uint256(payPrice[3])]);
         currentPhase = ShoppingPhases.Finished;
         emit NewSupplyChainPhase(ShoppingPhases.Finished);
